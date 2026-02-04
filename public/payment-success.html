@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Payment Successful</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0fdf4;
+      text-align: center;
+      padding-top: 80px;
+    }
+
+    .card {
+      background: white;
+      padding: 40px;
+      max-width: 420px;
+      margin: auto;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      color: #16a34a;
+      margin-bottom: 10px;
+    }
+
+    .info {
+      margin-top: 20px;
+      text-align: left;
+      font-size: 15px;
+    }
+
+    .info p {
+      margin: 6px 0;
+    }
+
+    .label {
+      font-weight: bold;
+      color: #374151;
+    }
+
+    .footer {
+      margin-top: 25px;
+      font-size: 13px;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h1>✅ Payment Successful</h1>
+    <p id="message">Your payment was successful.</p>
+
+    <div class="info">
+      <p><span class="label">Transaction ID:</span> <span id="tranId">---</span></p>
+      <p><span class="label">Amount:</span> ৳<span id="amount">---</span></p>
+    </div>
+
+    <div class="footer">
+      You will be redirected shortly...
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+
+    document.getElementById('tranId').innerText =
+      params.get('tranId') || 'N/A';
+
+    document.getElementById('amount').innerText =
+      params.get('amount') || '0';
+
+    document.getElementById('message').innerText =
+      params.get('message') || 'Payment completed successfully';
+
+    // ⏳ Auto redirect after 5 seconds
+    setTimeout(() => {
+      window.location.href = 'http://localhost:3000'; // change to frontend/dashboard URL
+    }, 5000);
+  </script>
+
+</body>
+</html>
