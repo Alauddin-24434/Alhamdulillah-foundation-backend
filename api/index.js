@@ -1,25 +1,21 @@
-import 'ts-node/register';
-import 'tsconfig-paths/register';
-import { NestFactory } from '@nestjs/core';
-import { ExpressAdapter } from '@nestjs/platform-express';
-import express, { Request, Response } from 'express';
-import cookieParser from 'cookie-parser';
-import helmet from 'helmet';
-import { ValidationPipe, BadRequestException, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { AppModule } from 'src/app.module';
+const express = require('express');
+const { NestFactory } = require('@nestjs/core');
+const { ExpressAdapter } = require('@nestjs/platform-express');
+const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
+const { ValidationPipe, BadRequestException, Logger } = require('@nestjs/common');
+const { ConfigService } = require('@nestjs/config');
+const { AppModule } = require('../dist/app.module'); // compiled JS থেকে import
 
 const server = express();
-let cachedServer: any;
+let cachedServer;
 const logger = new Logger('VercelHandler');
 
 async function createNestServer() {
   logger.log('Creating NestJS server...');
-  const app = await NestFactory.create(
-    AppModule,
-    new ExpressAdapter(server),
-    { logger: ['log', 'error', 'warn', 'debug', 'verbose'] }
-  );
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
+    logger: ['log', 'error', 'warn', 'debug', 'verbose'],
+  });
 
   const configService = app.get(ConfigService);
 
@@ -27,7 +23,7 @@ async function createNestServer() {
   app.use(helmet());
 
   app.enableCors({
-    origin: configService.get<string>('FRONTEND_URL') || 'http://localhost:3000',
+    origin: configService.get('FRONTEND_URL') || 'http://localhost:3000',
     credentials: true,
   });
 
@@ -42,7 +38,9 @@ async function createNestServer() {
       exceptionFactory: (errors) => {
         const result = errors.map((error) => ({
           property: error.property,
-          message: error.constraints ? Object.values(error.constraints)[0] : 'Invalid value',
+          message: error.constraints
+            ? Object.values(error.constraints)[0]
+            : 'Invalid value',
         }));
         return new BadRequestException(result);
       },
@@ -54,7 +52,7 @@ async function createNestServer() {
   return server;
 }
 
-export default async function handler(req: Request, res: Response) {
+module.exports = async function handler(req, res) {
   logger.log(`Incoming request: ${req.method} ${req.url}`);
   if (!cachedServer) {
     logger.log('No cached server found. Initializing...');
@@ -69,4 +67,4 @@ export default async function handler(req: Request, res: Response) {
     logger.error('Error handling request', err);
     res.status(500).send('Internal Server Error');
   }
-}
+};
