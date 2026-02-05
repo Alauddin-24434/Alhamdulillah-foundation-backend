@@ -15,7 +15,7 @@ async function bootstrap() {
   };
 
   try {
-    console.log('🌱 Seeding Super Admin...');
+    console.log('Seeding Super Admin...');
 
     const userModel = (userService as any).userModel;
     if (!userModel) {
@@ -25,18 +25,18 @@ async function bootstrap() {
     // Delete existing user if it exists
     const existing = await userModel.findOne({ email: adminData.email });
     if (existing) {
-      console.log('🗑️  Deleting existing Super Admin...');
+      console.log('Deleting existing Super Admin...');
       await userModel.deleteOne({ email: adminData.email });
     }
 
     const newUser = new userModel(adminData);
     await newUser.save();
 
-    console.log('✅ Super Admin created successfully!');
-    console.log(`📧 Email: ${adminData.email}`);
-    console.log(`🔑 Password: ${adminData.password}`);
+    console.log('Super Admin created successfully!');
+    console.log(`Email: ${adminData.email}`);
+    console.log(`Password: ${adminData.password}`);
   } catch (error) {
-    console.error('❌ Seeding failed:', error);
+    console.error('Seeding failed:', error);
   } finally {
     await app.close();
     process.exit();

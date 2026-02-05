@@ -8,28 +8,20 @@ import {
 } from './dto/create-management.dto';
 import { UpdateManagementDto } from './dto/update-management.dto';
 
-import { RedisService } from 'src/redis/redis.service';
-
 @Injectable()
 export class ManagementService {
   constructor(
     @InjectModel(Management.name)
     private readonly managementModel: Model<Management>,
-    private readonly redisService: RedisService,
   ) {}
 
   async create(createManagementDto: CreateManagementDto): Promise<Management> {
     const created = new this.managementModel(createManagementDto);
-    const saved = await created.save();
-    
-    // 🧹 Invalidate Cache
-    await this.redisService.delPattern('management:all*');
-    
-    return saved;
+    return await created.save();
   }
 
   async findAll(
-    query: ManagementQueryDto = {}, // 🔥 CRITICAL FIX
+    query: ManagementQueryDto = {},
   ): Promise<{
     data: Management[];
     meta: {
@@ -39,11 +31,6 @@ export class ManagementService {
       totalPage: number;
     };
   }> {
-    // 🔍 Check Cache
-    const cacheKey = `management:all:${JSON.stringify(query)}`;
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) return cached as any;
-
     const {
       page = 1,
       limit = 10,
@@ -54,7 +41,7 @@ export class ManagementService {
 
     const skip = (page - 1) * limit;
 
-    /* 🔍 Search */
+    /* Search */
     const filter: any = {};
     if (search) {
       filter.$or = [
@@ -64,7 +51,7 @@ export class ManagementService {
       ];
     }
 
-    /* ↕️ Sort */
+    /* Sort */
     const sortCondition: Record<string, SortOrder> = {
       [sortBy]: sortOrder === 'asc' ? 1 : -1,
     };
@@ -81,7 +68,7 @@ export class ManagementService {
       this.managementModel.countDocuments(filter),
     ]);
 
-    const result = {
+    return {
       data,
       meta: {
         total,
@@ -90,19 +77,9 @@ export class ManagementService {
         totalPage: Math.ceil(total / limit),
       },
     };
-
-    // 💾 Set Cache
-    await this.redisService.set(cacheKey, result, 600);
-    
-    return result;
   }
 
   async findOne(id: string): Promise<Management> {
-    // 🔍 Check Cache
-    const cacheKey = `management:${id}`;
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) return cached as any;
-  
     const management = await this.managementModel
       .findById(id)
       .populate('userId')
@@ -111,10 +88,7 @@ export class ManagementService {
     if (!management) {
       throw new NotFoundException(`Management record with ID ${id} not found`);
     }
-    
-    // 💾 Set Cache
-    await this.redisService.set(cacheKey, management, 1800);
-    
+
     return management;
   }
 
@@ -129,11 +103,7 @@ export class ManagementService {
     if (!updated) {
       throw new NotFoundException(`Management record with ID ${id} not found`);
     }
-    
-    // 🧹 Invalidate Cache
-    await this.redisService.del(`management:${id}`);
-    await this.redisService.delPattern('management:all*');
-    
+
     return updated;
   }
 
@@ -145,11 +115,7 @@ export class ManagementService {
     if (!deleted) {
       throw new NotFoundException(`Management record with ID ${id} not found`);
     }
-    
-    // 🧹 Invalidate Cache
-    await this.redisService.del(`management:${id}`);
-    await this.redisService.delPattern('management:all*');
-    
+
     return deleted;
   }
 }

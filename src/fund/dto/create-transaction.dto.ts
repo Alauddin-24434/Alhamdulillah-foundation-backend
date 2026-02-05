@@ -22,11 +22,11 @@ export class CreateFundTransactionDto {
   @IsNotEmpty()
   reason: string;
 
-  // 🧾 Evidence image URLs (optional)
+  // Evidence image URLs (optional)
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  // অথবা strict হলে:
+  // or if strict:
   // @IsUrl({}, { each: true })
   evidenceImages?: string[];
 }

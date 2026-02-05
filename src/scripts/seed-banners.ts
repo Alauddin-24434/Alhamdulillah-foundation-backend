@@ -18,12 +18,12 @@ async function bootstrap() {
 
     if (!projects || projects.length === 0) {
       logger.error(
-        '❌ No projects found. Please run "npm run seed" (for projects) first.',
+        'No projects found. Please run "npm run seed" (for projects) first.',
       );
       process.exit(1);
     }
 
-    logger.log(`📚 Found ${projects.length} projects to link.`);
+    logger.log(`Found ${projects.length} projects to link.`);
 
     // 2. Define Dummy Banners
     const bannersData = [
@@ -72,13 +72,13 @@ async function bootstrap() {
       });
 
       logger.log(
-        `✅ Created banner: "${bannerInfo.title}" linked to "${project.name}"`,
+        `Created banner: "${bannerInfo.title}" linked to "${project.name}"`,
       );
     }
 
-    logger.log('🎉 Banner seeding completed successfully!');
+    logger.log('Banner seeding completed successfully!');
   } catch (error) {
-    logger.error('❌ Banner seeding failed:', error);
+    logger.error('Banner seeding failed:', error);
   } finally {
     await app.close();
     process.exit();

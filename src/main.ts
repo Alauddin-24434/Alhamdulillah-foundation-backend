@@ -11,14 +11,14 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    logger: ['error', 'warn'], // 🔥 clean output
+    logger: ['error', 'warn'], // clean output
   });
   
 
   const configService = app.get(ConfigService);
 app.useStaticAssets(join(__dirname, '..', 'public'));
 
-  // 🔥 Stripe Webhook RAW body
+  // Stripe Webhook RAW body
   app.use(
     '/api/payments/stripe/webhook',
     bodyParser.raw({ type: 'application/json' }),
@@ -76,7 +76,7 @@ app.useStaticAssets(join(__dirname, '..', 'public'));
   const port = configService.get<number>('PORT') || 5000;
   await app.listen(port);
 
-  console.log(`🚀 Application is running on: http://localhost:${port}/api`);
-  console.log(`📜 Documentation available at: http://localhost:${port}/docs`);
+  console.log(`Application is running on: http://localhost:${port}/api`);
+  console.log(`Documentation available at: http://localhost:${port}/docs`);
 }
 bootstrap();

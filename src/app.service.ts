@@ -5,7 +5,7 @@ export class AppService {
   getHello() {
     return {
       success: true,
-      message: '🚀 Server is running successfully',
+      message: 'Server is running successfully',
       timestamp: new Date().toISOString(),
     };
   }

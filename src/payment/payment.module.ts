@@ -12,7 +12,6 @@ import {
 } from 'src/fund/schemas/fund-transaction.schema';
 
 import { PaymentService } from './payment.service';
-import { StripeGateway } from './getways/stripe/stripe.getway';
 
 import { UserService } from 'src/user/user.service';
 import { SslGateway } from './getways/ssl/ssl.gateway';
@@ -25,12 +24,9 @@ import { SslGateway } from './getways/ssl/ssl.gateway';
       { name: User.name, schema: UserSchema },
     ]),
     FundModule,
-
-    
-  
   ],
   controllers: [PaymentController],
-  providers: [PaymentService,  SslGateway, StripeGateway, UserService],
+  providers: [PaymentService,  SslGateway, UserService],
   exports: [PaymentService],
 })
 export class PaymentModule {}

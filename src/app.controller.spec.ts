@@ -19,7 +19,7 @@ describe('AppController', () => {
       expect(appController.getHello()).toEqual(
         expect.objectContaining({
           success: true,
-          message: '🚀 Server is running successfully',
+          message: 'Server is running successfully',
         }),
       );
     });
