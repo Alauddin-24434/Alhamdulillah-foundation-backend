@@ -1,4 +1,5 @@
-import 'tsconfig-paths/register'; // ✅ absolute imports fix
+import 'ts-node/register';
+import 'tsconfig-paths/register';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import express, { Request, Response } from 'express';
