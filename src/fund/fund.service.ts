@@ -63,7 +63,7 @@ export class FundService {
       throw new BadRequestException('Request is already processed');
     }
 
-    // 🔥 Check if user already approved
+    // Check if user already approved
     const alreadyApproved = request.approvals.some(
       (id) => id.toString() === user._id.toString(),
     );
@@ -169,7 +169,7 @@ export class FundService {
       type,
       amount,
       reason,
-      evidenceImages, // ✅ added
+      evidenceImages, // added
       balanceSnapshot: newBalance,
       transactionId: `TX-${Date.now()}`,
     });

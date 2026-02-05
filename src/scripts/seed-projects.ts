@@ -12,7 +12,7 @@ async function bootstrap() {
   try {
     const projectService = app.get(ProjectService);
 
-    // ✅ Fixed Admin ID
+    // Fixed Admin ID
     const creatorId = new Types.ObjectId('6978beb29debc5d92807af02');
 
     const projects = [
@@ -96,7 +96,7 @@ async function bootstrap() {
       },
     ];
 
-    logger.log(`🏗️ Seeding ${projects.length} projects...`);
+    logger.log(`Seeding ${projects.length} projects...`);
 
     for (const project of projects) {
       const created = await projectService.create(
@@ -110,12 +110,12 @@ async function bootstrap() {
         creatorId.toString(),
       );
 
-      logger.log(`✅ Created project: ${created.name}`);
+      logger.log(`Created project: ${created.name}`);
     }
 
-    logger.log('🎉 Project seeding completed successfully!');
+    logger.log('Project seeding completed successfully!');
   } catch (error) {
-    logger.error('❌ Seeding failed', error);
+    logger.error('Seeding failed', error);
   } finally {
     await app.close();
     process.exit();

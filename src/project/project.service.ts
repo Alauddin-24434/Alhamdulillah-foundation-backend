@@ -9,13 +9,10 @@ import { Project, ProjectStatus } from './schemas/project.schema';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 
-import { RedisService } from 'src/redis/redis.service';
-
 @Injectable()
 export class ProjectService {
   constructor(
     @InjectModel(Project.name) private projectModel: Model<Project>,
-    private readonly redisService: RedisService,
   ) {}
 
   async create(createProjectDto: CreateProjectDto, userId: string) {
@@ -24,10 +21,7 @@ export class ProjectService {
       createdBy: userId,
     });
 
-    const saved = await project.save();
-    // 🧹 Invalidate list cache
-    await this.redisService.delPattern('projects:all*');
-    return saved;
+    return await project.save();
   }
 
   async findAll(query?: {
@@ -37,11 +31,6 @@ export class ProjectService {
     page?: number;
     limit?: number;
   }) {
-    // 🔍 Check Cache
-    const cacheKey = `projects:all:${JSON.stringify(query)}`;
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) return cached;
-
     const { search, status, category, page = 1, limit = 10 } = query || {};
     const filter: any = {};
 
@@ -74,7 +63,7 @@ export class ProjectService {
       this.projectModel.countDocuments(filter).exec(),
     ]);
 
-    const result = {
+    return {
       data,
       meta: {
         total,
@@ -83,19 +72,9 @@ export class ProjectService {
         totalPages: Math.ceil(total / limit),
       },
     };
-
-    // 💾 Set Cache (TTL 5 mins)
-    await this.redisService.set(cacheKey, result, 300);
-
-    return result;
   }
 
   async findOne(id: string) {
-    // 🔍 Check Cache
-    const cacheKey = `projects:${id}`;
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) return cached;
-
     const project = await this.projectModel
       .findById(id)
       .populate('createdBy', 'name email avatar')
@@ -104,9 +83,6 @@ export class ProjectService {
     if (!project) {
       throw new NotFoundException('Project not found');
     }
-
-    // 💾 Set Cache
-    await this.redisService.set(cacheKey, project, 600); // 10 mins
 
     return project;
   }
@@ -126,13 +102,7 @@ export class ProjectService {
     }
 
     Object.assign(project, updateProjectDto);
-    const updated = await project.save();
-
-    // 🧹 Invalidate Cache
-    await this.redisService.del(`projects:${id}`);
-    await this.redisService.delPattern('projects:all*');
-
-    return updated;
+    return await project.save();
   }
 
   async remove(id: string, userId: string) {
@@ -149,51 +119,30 @@ export class ProjectService {
       );
     }
 
-    const deleted = await this.projectModel.findByIdAndDelete(id).exec();
-    
-    // 🧹 Invalidate Cache
-    await this.redisService.del(`projects:${id}`);
-    await this.redisService.delPattern('projects:all*');
-
-    return deleted;
+    return await this.projectModel.findByIdAndDelete(id).exec();
   }
 
   async updateMemberCount(projectId: string, increment: number) {
-    const updated = await this.projectModel
+    return await this.projectModel
       .findByIdAndUpdate(
         projectId,
         { $inc: { memberCount: increment } },
         { new: true },
       )
       .exec();
-    
-    // 🧹 Invalidate Cache
-    if(updated) {
-        await this.redisService.del(`projects:${projectId}`);
-        await this.redisService.delPattern('projects:all*');
-    }
-    return updated;
   }
 
   async updateTotalInvestment(projectId: string, amount: number) {
-    const updated = await this.projectModel
+    return await this.projectModel
       .findByIdAndUpdate(
         projectId,
         { $inc: { totalInvestment: amount } },
         { new: true },
       )
       .exec();
-    
-    // 🧹 Invalidate Cache
-    if(updated) {
-        await this.redisService.del(`projects:${projectId}`);
-         // Investment changes might change ranking
-        await this.redisService.delPattern('projects:all*');
-    }
-    return updated;
   }
 
-  // 👥 MEMBER MANAGEMENT
+  // MEMBER MANAGEMENT
   async addMember(projectId: string, memberData: any) {
     const project = await this.projectModel.findById(projectId);
     
@@ -212,13 +161,7 @@ export class ProjectService {
     project.members.push(memberData);
     project.memberCount = project.members.length;
 
-    const saved = await project.save();
-
-    // 🧹 Invalidate Cache
-    await this.redisService.del(`projects:${projectId}`);
-    await this.redisService.delPattern('projects:all*');
-
-    return saved;
+    return await project.save();
   }
 
   async removeMember(projectId: string, userId: string) {
@@ -233,13 +176,7 @@ export class ProjectService {
     );
     project.memberCount = project.members.length;
 
-    const saved = await project.save();
-
-    // 🧹 Invalidate Cache
-    await this.redisService.del(`projects:${projectId}`);
-    await this.redisService.delPattern('projects:all*');
-
-    return saved;
+    return await project.save();
   }
 
   async getMembers(projectId: string) {

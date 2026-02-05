@@ -17,7 +17,7 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger.midd
 import { NoticeModule } from './notice/notice.module';
 import { ManagementModule } from './management/management.module';
 
-import { RedisModule } from './redis/redis.module';
+
 
 @Module({
   imports: [
@@ -57,7 +57,6 @@ import { RedisModule } from './redis/redis.module';
     FundModule,
     ManagementModule,
 
-    RedisModule,
   ],
   controllers: [AppController],
   providers: [AppService],

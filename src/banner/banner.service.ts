@@ -4,38 +4,22 @@ import { Model } from 'mongoose';
 import { Banner } from './schemas/banner.schema';
 import { CreateBannerDto } from './dto/create-banner.dto';
 
-import { RedisService } from 'src/redis/redis.service';
-
 @Injectable()
 export class BannerService {
   constructor(
-      @InjectModel(Banner.name) private bannerModel: Model<Banner>,
-      private readonly redisService: RedisService,
+    @InjectModel(Banner.name) private bannerModel: Model<Banner>,
   ) {}
 
   async create(createBannerDto: CreateBannerDto) {
     const banner = new this.bannerModel(createBannerDto);
-    const saved = await banner.save();
-    
-    // 🧹 Invalidate Cache
-    await this.redisService.del('banners:active');
-    
-    return saved;
+    return await banner.save();
   }
 
   async findAll() {
-    const cached = await this.redisService.get('banners:active');
-    if (cached) return cached;
-
-    const banners = await this.bannerModel
+    return await this.bannerModel
       .find({ isActive: true })
       .sort({ displayOrder: 1 })
       .exec();
-    
-    // 💾 Set Cache (TTL 30 mins)
-    await this.redisService.set('banners:active', banners, 1800);
-    
-    return banners;
   }
 
   async findOne(id: string) {
@@ -56,9 +40,6 @@ export class BannerService {
     if (!banner) {
       throw new NotFoundException('Banner not found');
     }
-    
-    // 🧹 Invalidate Cache
-    await this.redisService.del('banners:active');
 
     return banner;
   }
@@ -69,9 +50,6 @@ export class BannerService {
     if (!banner) {
       throw new NotFoundException('Banner not found');
     }
-    
-    // 🧹 Invalidate Cache
-    await this.redisService.del('banners:active');
 
     return banner;
   }

@@ -8,32 +8,30 @@ export class SslGateway implements PaymentGateway {
   private sslcz: SSLCommerzPayment;
 
   constructor(private readonly configService: ConfigService) {
-    const storeId =
-      this.configService.get<string>('SSLCOMMERZ_STORE_ID');
-    const storePass =
-      this.configService.get<string>('SSLCOMMERZ_STORE_PASS');
-    const isLive =
-      this.configService.get<string>('SSLCOMMERZ_IS_LIVE') ===
-      'true';
-
-
-if (!storeId || !storePass) {
-  throw new InternalServerErrorException(
-    'SSLCommerz credentials not configured',
-  );
-}
-
-    this.sslcz = new SSLCommerzPayment(
-      storeId,
-      storePass,
-      isLive,
-    );
+    this.initSslcz();
   }
 
-    async createPayment(data: any) {
-    
-    const appUrl =
-      this.configService.get<string>('APP_URL');
+  private initSslcz() {
+    const storeId = this.configService.get<string>('SSLCOMMERZ_STORE_ID');
+    const storePass = this.configService.get<string>('SSLCOMMERZ_STORE_PASS');
+    const isLive = this.configService.get<string>('SSLCOMMERZ_IS_LIVE') === 'true';
+
+    if (storeId && storePass) {
+      this.sslcz = new SSLCommerzPayment(storeId, storePass, isLive);
+    }
+  }
+
+  private ensureInitialized() {
+    if (!this.sslcz) {
+      throw new InternalServerErrorException(
+        'SSLCommerz credentials not configured. Please check your environment variables.',
+      );
+    }
+  }
+
+  async createPayment(data: any) {
+    this.ensureInitialized();
+    const appUrl = this.configService.get<string>('APP_URL');
 
     const paymentData = {
       total_amount: data.amount,

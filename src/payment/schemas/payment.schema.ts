@@ -2,7 +2,6 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
 export enum PaymentMethod {
-  STRIPE = 'STRIPE',
   SSLCOMMERZ = 'SSLCOMMERZ',
 }
 

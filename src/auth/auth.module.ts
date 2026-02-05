@@ -15,7 +15,7 @@ import { Payment, PaymentSchema } from 'src/payment/schemas/payment.schema';
 
 @Module({
   imports: [
-    PassportModule.register({ defaultStrategy: 'jwt' }), // ⭐ খুব জরুরি
+    PassportModule.register({ defaultStrategy: 'jwt' }), // Required for JWT strategy
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -37,12 +37,12 @@ import { Payment, PaymentSchema } from 'src/payment/schemas/payment.schema';
   controllers: [AuthController],
   providers: [
     AuthService,
-    JwtStrategy, // ⭐ Strategy register না হলে Guard কাজ করবে না
-    JwtAuthGuard, // (optional) যদি DI দিয়ে কোথাও inject করো
+    JwtStrategy, // Strategy must be registered for guards to work
+    JwtAuthGuard, // Optional for DI injection
   ],
   exports: [
     AuthService,
-    PassportModule, // ⭐ অন্য module-এ guard ব্যবহার করতে
+    PassportModule, // Export to use guards in other modules
   ],
 })
 export class AuthModule {}

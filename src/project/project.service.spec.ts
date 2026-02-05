@@ -3,7 +3,6 @@ import { getModelToken } from '@nestjs/mongoose';
 import { ProjectService } from './project.service';
 import { Project } from './schemas/project.schema';
 import { NotFoundException } from '@nestjs/common';
-import { RedisService } from 'src/redis/redis.service';
 
 describe('ProjectService', () => {
   let service: ProjectService;
@@ -24,13 +23,6 @@ describe('ProjectService', () => {
     exec: jest.fn(),
   };
 
-  const mockRedisService = {
-    get: jest.fn(),
-    set: jest.fn(),
-    del: jest.fn(),
-    delPattern: jest.fn(),
-  };
-
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -38,10 +30,6 @@ describe('ProjectService', () => {
         {
           provide: getModelToken(Project.name),
           useValue: mockProjectModel,
-        },
-        {
-          provide: RedisService,
-          useValue: mockRedisService,
         },
       ],
     }).compile();

@@ -3,10 +3,8 @@ import {
   Post,
   Body,
   UseGuards,
-  Request,
   Get,
   Param,
-  Headers,
   HttpCode,
   Req,
   Res,
@@ -113,10 +111,6 @@ async sslSuccess(
 ) {
   const { message } = await this.paymentService.handleSslSuccess(body);
 
-  // 🔥 AUTH COOKIE REMOVE (if needed)
-  // res.clearCookie('accessToken'); // Your cookie name
-  // res.clearCookie('refreshToken'); // If exists
-
   const tranId = body.tran_id;
   const amount = body.amount;
 
@@ -155,42 +149,6 @@ async sslSuccess(
   // ===============================
   @Post('ssl/ipn')
   async sslIpn(@Body() body) {
-    // 🔥 IPN only updates DB (NO HTML)
     return this.paymentService.handleSslIpn(body);
-  }
-
-  // ===============================
-  // STRIPE CALLBACKS
-  // ===============================
-
-  // Stripe Checkout success redirect (optional)
-  @Get('stripe/success')
-  @HttpCode(302)
-  async stripeSuccess(@Query('session_id') sessionId: string, @Res() res: Response) {
-    if (sessionId) {
-      await this.paymentService.handleStripeSuccess(sessionId);
-    }
-    const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
-    return res.redirect(`${frontendUrl}/dashboard?status=PAID`);
-  }
-
-  // Stripe Checkout cancel redirect
-  @Get('stripe/cancel')
-  @HttpCode(302)
-  async stripeCancel(@Res() res: Response) {
-    const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
-    return res.redirect(`${frontendUrl}/dashboard?status=CANCELLED`);
-  }
-  @Post('stripe/webhook')
-  async stripeWebhook(
-    @Body() body: any,
-    @Headers('stripe-signature') signature: string,
-  ) {
-    console.log('🔥 STRIPE WEBHOOK HIT 🔥');
-    console.log('Event type:', body?.type);
-
-    return this.paymentService.handleStripeWebhook(body, signature);
   }
 }

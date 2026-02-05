@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
 import { BannerService } from './banner.service';
 import { Banner } from './schemas/banner.schema';
-import { RedisService } from 'src/redis/redis.service';
 
 describe('BannerService', () => {
   let service: BannerService;
@@ -21,13 +20,6 @@ describe('BannerService', () => {
     exec: jest.fn(),
   };
 
-  const mockRedisService = {
-    get: jest.fn(),
-    set: jest.fn(),
-    del: jest.fn(),
-    delPattern: jest.fn(),
-  };
-
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -35,10 +27,6 @@ describe('BannerService', () => {
         {
           provide: getModelToken(Banner.name),
           useValue: mockBannerModel,
-        },
-        {
-          provide: RedisService,
-          useValue: mockRedisService,
         },
       ],
     }).compile();

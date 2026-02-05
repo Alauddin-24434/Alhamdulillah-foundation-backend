@@ -5,13 +5,11 @@ import {
   PaymentStatus,
   PaymentPurpose,
 } from './schemas/payment.schema';
-import { StripeGateway } from './getways/stripe/stripe.getway';
 
 import { UserService } from 'src/user/user.service';
 import { SslGateway } from './getways/ssl/ssl.gateway';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import Stripe from 'stripe';
 import { ConfigService } from '@nestjs/config';
 import { User, UserRole, UserStatus } from 'src/user/schemas/user.schema';
 import { FundService } from 'src/fund/fund.service';
@@ -19,7 +17,6 @@ import { FundService } from 'src/fund/fund.service';
 @Injectable()
 export class PaymentService {
   constructor(
-    private readonly stripeGateway: StripeGateway,
     private readonly sslGateway: SslGateway,
     private readonly userService: UserService,
     private readonly fundService: FundService,
@@ -43,7 +40,7 @@ export class PaymentService {
 
     const user = await this.userService.findUserById(userId);
 
-    // 🔥 CREATE PAYMENT RECORD FIRST
+    // CREATE PAYMENT RECORD FIRST
     const payment = await this.paymentModel.create({
       userId,
       amount,
@@ -63,10 +60,6 @@ export class PaymentService {
     };
 
     switch (method) {
-      case PaymentMethod.STRIPE:
-        const stripeResult = await this.stripeGateway.createPayment(payload);
-        return stripeResult.checkoutUrl;
-
       case PaymentMethod.SSLCOMMERZ:
         const result = await this.sslGateway.createPayment(payload);
         return result.gatewayUrl;
@@ -149,7 +142,7 @@ export class PaymentService {
 
 
   /**
-   * 🔥 UNIVERSAL POST-PAYMENT PROCESS
+   * UNIVERSAL POST-PAYMENT PROCESS
    * Handles user role updates, fund transactions, and payment status.
    */
   private async completePaymentProcess(paymentId: string) {
@@ -189,60 +182,6 @@ export class PaymentService {
         console.warn(`[PAYMENT] User not found for role elevation: ${payment.userId}`);
       }
     }
-  }
-
-  async handleStripeWebhook(payload: any, signature: string) {
-    const stripeSecretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
-    const stripeWebhookSecret = this.configService.get<string>('STRIPE_WEBHOOK_SECRET',);
-
-    if (!stripeSecretKey || !stripeWebhookSecret) {
-      console.error('[STRIPE] Webhook configuration mismatch.');
-      throw new BadRequestException('Stripe configuration is missing');
-    }
-
-    const stripe = new Stripe(stripeSecretKey);
-    let event: Stripe.Event;
-
-    try {
-      event = stripe.webhooks.constructEvent(payload, signature, stripeWebhookSecret);
-    } catch (err) {
-      console.error('[STRIPE] Signature verification failed.');
-      throw new BadRequestException('Invalid Stripe signature');
-    }
-
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const transactionId = session.metadata?.transactionId;
-
-      if (transactionId) {
-        const payment = await this.paymentModel.findOne({ transactionId });
-        if (payment) {
-          await this.completePaymentProcess(payment._id.toString());
-        }
-      }
-    }
-
-    return { received: true };
-  }
-
-  async handleStripeSuccess(sessionId: string) {
-    const stripeSecretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
-    if (!stripeSecretKey) throw new BadRequestException('Stripe configuration is missing');
-    
-    const stripe = new Stripe(stripeSecretKey);
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-    if (session.payment_status === 'paid') {
-      const transactionId = session.metadata?.transactionId;
-      if (transactionId) {
-        const payment = await this.paymentModel.findOne({ transactionId });
-        if (payment) {
-          await this.completePaymentProcess(payment._id.toString());
-          return { message: 'Payment verified and processed.' };
-        }
-      }
-    }
-    throw new BadRequestException('Payment verification protocol failed.');
   }
 
 // ===============================
