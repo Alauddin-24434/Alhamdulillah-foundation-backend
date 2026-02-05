@@ -12,14 +12,14 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
 import { PaymentService } from './payment.service';
-import type { Response } from 'express';
+
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { UserRole } from 'src/user/schemas/user.schema';
-
 import { ConfigService } from '@nestjs/config';
 
 @ApiTags('Payments')
@@ -54,7 +54,7 @@ export class PaymentController {
   }
 
   // ===============================
-  // GET PAYMENT INVOICE BY ID (SECURE)
+  // GET PAYMENT INVOICE BY ID
   // ===============================
   @Get('invoice/:id')
   @UseGuards(AuthGuard('jwt'))
@@ -81,7 +81,11 @@ export class PaymentController {
   @UseGuards(AuthGuard('jwt'))
   @HttpCode(200)
   async getMyPayments(@Query() query: any, @Req() req) {
-    const result = await this.paymentService.getUserPayments(req.user._id, query);
+    const result = await this.paymentService.getUserPayments(
+      req.user._id,
+      query,
+    );
+
     return {
       success: true,
       statusCode: 200,
@@ -92,7 +96,7 @@ export class PaymentController {
   }
 
   // ===============================
-  // ADMIN / USER → GET ALL PAYMENTS
+  // ADMIN → GET ALL PAYMENTS
   // ===============================
   @Get()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -102,53 +106,59 @@ export class PaymentController {
   }
 
   // ===============================
-  // SSL SUCCESS
+  // SSL SUCCESS → REDIRECT TO FRONTEND
   // ===============================
-@Post('ssl/success')
-async sslSuccess(
-  @Body() body: any,
-  @Res({ passthrough: true }) res: Response,
-) {
-  const { message } = await this.paymentService.handleSslSuccess(body);
+  @Post('ssl/success')
+  async sslSuccess(@Body() body: any, @Res() res: Response) {
+    const { message } = await this.paymentService.handleSslSuccess(body);
 
-  const tranId = body.tran_id;
-  const amount = body.amount;
+    const tranId = body.tran_id;
+    const amount = body.amount;
 
-  return res.redirect(
-    `/payment-success.html?tranId=${tranId}&amount=${amount}&message=${message}`,
-  );
-}
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') ||
+      'http://localhost:3000';
 
-
-  // ===============================
-  // SSL FAIL
-  // ===============================
-  @Post('ssl/fail')
-  async sslFail(@Body() body, @Res() res: Response) {
-    await this.paymentService.handleSslFail(body);
-
-    return res.sendFile('payment-fail.html', {
-      root: 'public',
-    });
+    return res.redirect(
+      `${frontendUrl}/payment/success?tranId=${tranId}&amount=${amount}&message=${encodeURIComponent(
+        message,
+      )}`,
+    );
   }
 
   // ===============================
-  // SSL CANCEL
+  // SSL FAIL → REDIRECT
+  // ===============================
+  @Post('ssl/fail')
+  async sslFail(@Body() body: any, @Res() res: Response) {
+    await this.paymentService.handleSslFail(body);
+
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') ||
+      'http://localhost:3000';
+
+    return res.redirect(`${frontendUrl}/payment/fail`);
+  }
+
+  // ===============================
+  // SSL CANCEL → REDIRECT
   // ===============================
   @Post('ssl/cancel')
-  async sslCancel(@Body() body, @Res() res: Response) {
+  async sslCancel(@Body() body: any, @Res() res: Response) {
     await this.paymentService.handleSslCancel(body);
 
-    return res.sendFile('payment-cancel.html', {
-      root: 'public',
-    });
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') ||
+      'http://localhost:3000';
+
+    return res.redirect(`${frontendUrl}/payment/cancel`);
   }
 
   // ===============================
   // SSL IPN (SERVER TO SERVER)
   // ===============================
   @Post('ssl/ipn')
-  async sslIpn(@Body() body) {
+  async sslIpn(@Body() body: any) {
     return this.paymentService.handleSslIpn(body);
   }
 }
