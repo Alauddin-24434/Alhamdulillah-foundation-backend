@@ -84,20 +84,16 @@ export class PaymentController {
   @UseGuards(AuthGuard('jwt'))
   @HttpCode(200)
   async getMyPayments(@Query() query: any, @Req() req) {
-    const result = await this.paymentService.getUserPayments(
-      req.user._id,
-      query,
-    );
+    const { data, meta } = await this.paymentService.getUserPayments(req.user._id, query);
 
     return {
       success: true,
       statusCode: 200,
       message: 'Your payments retrieved successfully',
-      data: result.data,
-      meta: result.meta,
+      data,
+      meta,
     };
   }
-
   // ===============================
   // ADMIN → GET ALL PAYMENTS
   // ===============================
@@ -108,30 +104,42 @@ export class PaymentController {
     return this.paymentService.getAllPayments(query);
   }
 
-  // ===============================
-  // SSL SUCCESS
-  // ===============================
-  @Post('ssl/success')
-  async sslSuccess(@Body() body: any, @Res() res: Response) {
-    await this.paymentService.handleSslSuccess(body);
+// ===============================
+// Payment Controller: SSL SUCCESS
+// ===============================
+@Post('ssl/success')
+async sslSuccess(@Body() body: any, @Res() res: Response) {
+  console.log('[SSL SUCCESS RECEIVED]', body);
+
+  try {
+    const result = await this.paymentService.handleSslSuccess(body);
+    console.log('[SSL SUCCESS RESULT]', result);
 
     const tranId = body.tran_id;
     const amount = body.amount;
 
     res.setHeader('Content-Type', 'text/html');
     return res.send(this.successHtml(tranId, amount));
+  } catch (error) {
+    console.error('[SSL SUCCESS ERROR]', error);
+    res.setHeader('Content-Type', 'text/html');
+    return res.send(this.failHtml(body.tran_id, body.amount));
   }
+}
 
   // ===============================
   // SSL FAIL
   // ===============================
-  @Post('ssl/fail')
-  async sslFail(@Body() body: any, @Res() res: Response) {
-    await this.paymentService.handleSslFail(body);
+@Post('ssl/fail')
+async sslFail(@Body() body: any, @Res() res: Response) {
+  await this.paymentService.handleSslFail(body);
 
-    res.setHeader('Content-Type', 'text/html');
-    return res.send(this.failHtml());
-  }
+  const tranId = body.tran_id;
+  const amount = body.amount;
+
+  res.setHeader('Content-Type', 'text/html');
+  return res.send(this.failHtml(tranId, amount));
+}
 
   // ===============================
   // SSL CANCEL
@@ -178,26 +186,48 @@ a{background:#16a34a;color:#fff;padding:12px 20px;border-radius:8px;text-decorat
 </html>`;
   }
 
-  private failHtml() {
-    return `
+ private failHtml(tranId?: string, amount?: string) {
+  return `
 <!DOCTYPE html>
 <html>
 <head>
 <title>Payment Failed</title>
 <style>
-body{font-family:Arial;background:#fef2f2;display:flex;justify-content:center;align-items:center;height:100vh}
-.card{background:#fff;padding:40px;border-radius:12px;text-align:center}
-a{background:#dc2626;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none}
+body {
+  font-family: Arial;
+  background: #fef2f2;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+.card {
+  background: #fff;
+  padding: 40px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(0,0,0,.1);
+}
+a {
+  background: #dc2626;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+}
 </style>
 </head>
 <body>
 <div class="card">
 <h1 style="color:#dc2626">Payment Failed ❌</h1>
+${tranId ? `<p>Transaction ID: <b>${tranId}</b></p>` : ''}
+${amount ? `<p>Amount: <b>${amount}</b></p>` : ''}
 <a href="${this.frontendUrl}/dashboard">Go Back</a>
 </div>
 </body>
 </html>`;
-  }
+}
 
   private cancelHtml() {
     return `

@@ -12,6 +12,7 @@ import { User, UserSchema } from '../user/schemas/user.schema';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { StatsModule } from '../stats/stats.module';
 import { Payment, PaymentSchema } from 'src/payment/schemas/payment.schema';
+import { RefreshToken, RefreshTokenSchema } from './schemas/refresh-token.schema';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { Payment, PaymentSchema } from 'src/payment/schemas/payment.schema';
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Payment.name, schema: PaymentSchema },
+      { name: RefreshToken.name, schema: RefreshTokenSchema },
     ]),
  
 

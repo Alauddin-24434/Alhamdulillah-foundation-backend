@@ -21,8 +21,8 @@ export class PaymentService {
     private readonly userService: UserService,
     private readonly fundService: FundService,
     @InjectModel(Payment.name)
-      private readonly paymentModel: Model<Payment>,
-     @InjectModel(User.name)
+    private readonly paymentModel: Model<Payment>,
+    @InjectModel(User.name)
     private readonly userModel: Model<User>,
     private readonly configService: ConfigService,
   ) {}
@@ -68,23 +68,34 @@ export class PaymentService {
         throw new Error('Unsupported payment method');
     }
   }
-    
+
   async getUserPayments(userId: string, query: any) {
-    const { status, page = 1, limit = 10 } = query || {};
+    const {
+      page = 1,
+      limit = 10,
+      paymentStatus, // optional filter
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+    } = query || {};
+
     const filter: any = { userId };
 
-    if (status && status !== "ALL") {
-      filter.paymentStatus = status;
+    // Force only PAID payments if user didn't specify a filter
+    if (!paymentStatus) {
+      filter.paymentStatus = 'PAID';
+    } else if (paymentStatus !== 'ALL') {
+      filter.paymentStatus = paymentStatus;
     }
 
     const skip = (page - 1) * limit;
 
+    // Fetch data and count total
     const [data, total] = await Promise.all([
       this.paymentModel
         .find(filter)
-        .sort({ createdAt: -1 })
+        .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
         .skip(skip)
-        .limit(limit)
+        .limit(Number(limit))
         .lean(),
       this.paymentModel.countDocuments(filter).exec(),
     ]);
@@ -93,26 +104,25 @@ export class PaymentService {
       data,
       meta: {
         total,
-        page,
-        limit,
+        page: Number(page),
+        limit: Number(limit),
         totalPages: Math.ceil(total / limit),
       },
     };
   }
-    
   async getAllPayments(query: any) {
     const { status, search, page = 1, limit = 10 } = query || {};
     const filter: any = {};
 
-    if (status && status !== "ALL") {
+    if (status && status !== 'ALL') {
       filter.paymentStatus = status;
     }
 
     if (search) {
       // search by transactionId or other fields if needed
       filter.$or = [
-        { transactionId: { $regex: search, $options: "i" } },
-        { senderNumber: { $regex: search, $options: "i" } },
+        { transactionId: { $regex: search, $options: 'i' } },
+        { senderNumber: { $regex: search, $options: 'i' } },
       ];
     }
 
@@ -121,7 +131,7 @@ export class PaymentService {
     const [data, total] = await Promise.all([
       this.paymentModel
         .find(filter)
-        .populate("userId", "name email phone")
+        .populate('userId', 'name email phone')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -140,67 +150,105 @@ export class PaymentService {
     };
   }
 
-
   /**
    * UNIVERSAL POST-PAYMENT PROCESS
    * Handles user role updates, fund transactions, and payment status.
    */
   private async completePaymentProcess(paymentId: string) {
     const payment = await this.paymentModel.findById(paymentId);
-    if (!payment || payment.paymentStatus === PaymentStatus.PAID) {
+    console.log('[PAYMENT FOR COMPLETION]', payment);
+
+    if (!payment) {
+      console.log('[PAYMENT] Not found');
       return;
     }
 
-    console.log(`[PAYMENT] Processing completion for ${paymentId} (${payment.transactionId})`);
+    // Start Mongoose Transaction
+    const session = await this.paymentModel.db.startSession();
+    try {
+      await session.withTransaction(async () => {
+        // 1️⃣ Authority Elevation (Membership)
+        if (payment.purpose === PaymentPurpose.MEMBERSHIP_FEE) {
+          const user = await this.userModel
+            .findById(payment.userId)
+            .session(session);
+          console.log('[USER BEFORE UPDATE]', user);
 
-    // 1. Update Payment Record
-    payment.paymentStatus = PaymentStatus.PAID;
-    payment.paidAt = new Date();
-    await payment.save();
+          // ✅ Update role only if user is not already a MEMBER
+          if (user && user.role !== UserRole.MEMBER) {
+            user.role = UserRole.MEMBER;
+            user.status = UserStatus.ACTIVE;
+            await user.save({ session });
+            console.log('[MEMBERSHIP] User upgraded to MEMBER:', user._id);
+          } else {
+            console.log(
+              '[MEMBERSHIP] User already MEMBER, no update:',
+              user?._id,
+            );
+          }
+        }
 
-    // 2. Fund Injection (Donations)
-    if (payment.purpose === PaymentPurpose.MONTHLY_DONATION || payment.purpose === PaymentPurpose.PROJECT_DONATION) {
-      await this.fundService.addTransactionFromPayment(
-        payment.userId.toString(),
-        payment.amount,
-        payment._id.toString(),
-        payment.transactionId,
-        payment.purpose === PaymentPurpose.MONTHLY_DONATION ? 'Monthly Donation' : 'Project Donation',
-      );
-      console.log(`[PAYMENT] Fund record created for ${payment.transactionId}`);
+        // 2️⃣ Update Payment Status
+        if (payment.paymentStatus !== PaymentStatus.PAID) {
+          payment.paymentStatus = PaymentStatus.PAID;
+          payment.paidAt = new Date();
+          await payment.save({ session });
+          console.log('[PAYMENT STATUS UPDATED]', payment.transactionId);
+        } else {
+          console.log('[PAYMENT] Already PAID:', payment.transactionId);
+        }
+
+        // 3️⃣ Fund Injection (for donations)
+        if (
+          payment.purpose === PaymentPurpose.MONTHLY_DONATION ||
+          payment.purpose === PaymentPurpose.PROJECT_DONATION
+        ) {
+          await this.fundService.addTransactionFromPayment(
+            payment.userId.toString(),
+            payment.amount,
+            payment._id.toString(),
+            payment.transactionId,
+            payment.purpose === PaymentPurpose.MONTHLY_DONATION
+              ? 'Monthly Donation'
+              : 'Project Donation',
+          );
+          console.log('[FUND] Fund record created for', payment.transactionId);
+        }
+      });
+    } finally {
+      session.endSession();
     }
 
-    // 3. Authority Elevation (Membership)
-    if (payment.purpose === PaymentPurpose.MEMBERSHIP_FEE) {
-      const user = await this.userModel.findById(payment.userId);
-      if (user) {
-        user.role = UserRole.MEMBER;
-        user.status = UserStatus.ACTIVE;
-        await user.save();
-        console.log(`[PAYMENT] Authority elevated to MEMBER for user: ${user.email}`);
-      } else {
-        console.warn(`[PAYMENT] User not found for role elevation: ${payment.userId}`);
-      }
-    }
+    console.log(
+      '[PAYMENT] Completion done for transaction',
+      payment.transactionId,
+    );
   }
 
-// ===============================
-// SSL SUCCESS
-// ===============================
-async handleSslSuccess(payload: any) {
-  const { tran_id } = payload;
-  const payment = await this.paymentModel.findOne({ transactionId: tran_id });
+  // ===============================
+  // SSL SUCCESS
+  // ===============================
+  async handleSslSuccess(payload: any) {
+    console.log('[HANDLE SSL SUCCESS PAYLOAD]', payload);
 
-  if (!payment) throw new BadRequestException('Payment record not found');
+    const { tran_id } = payload;
+    const payment = await this.paymentModel.findOne({ transactionId: tran_id });
 
-  await this.completePaymentProcess(payment._id.toString());
+    if (!payment) {
+      console.error('[PAYMENT NOT FOUND]', tran_id);
+      throw new BadRequestException('Payment record not found');
+    }
 
-  return {
-    message: payment.purpose === PaymentPurpose.MEMBERSHIP_FEE 
-      ? 'Payment successful & membership activated'
-      : 'Payment successful & fund updated',
-  };
-}
+    // Complete payment with transaction
+    await this.completePaymentProcess(payment._id.toString());
+
+    return {
+      message:
+        payment.purpose === PaymentPurpose.MEMBERSHIP_FEE
+          ? 'Payment successful & membership activated'
+          : 'Payment successful & fund updated',
+    };
+  }
 
   // ===============================
   // SSL FAIL
@@ -213,9 +261,7 @@ async handleSslSuccess(payload: any) {
       { paymentStatus: PaymentStatus.FAILED },
     );
 
-    return {
-      message: 'Payment failed',
-    };
+    return { message: 'Payment failed' };
   }
 
   // ===============================
@@ -229,9 +275,7 @@ async handleSslSuccess(payload: any) {
       { paymentStatus: PaymentStatus.CANCELLED },
     );
 
-    return {
-      message: 'Payment cancelled',
-    };
+    return { message: 'Payment cancelled' };
   }
 
   // ===============================
@@ -244,9 +288,7 @@ async handleSslSuccess(payload: any) {
       return { message: 'Invalid IPN' };
     }
 
-    const payment = await this.paymentModel.findOne({
-      transactionId: tran_id,
-    });
+    const payment = await this.paymentModel.findOne({ transactionId: tran_id });
 
     if (!payment) return;
 
@@ -258,13 +300,19 @@ async handleSslSuccess(payload: any) {
   }
 
   async getPaymentById(id: string, userId: string, role: string) {
-    const payment = await this.paymentModel.findById(id).populate('userId', 'name email phone address cityState avatar');
+    const payment = await this.paymentModel
+      .findById(id)
+      .populate('userId', 'name email phone address cityState avatar');
     if (!payment) {
       throw new BadRequestException('Payment not found');
     }
 
     // Security: Only the user who made the payment or an Admin can see the invoice
-    if (payment.userId['_id'].toString() !== userId && role !== UserRole.SUPER_ADMIN && role !== UserRole.ADMIN) {
+    if (
+      payment.userId['_id'].toString() !== userId &&
+      role !== UserRole.SUPER_ADMIN &&
+      role !== UserRole.ADMIN
+    ) {
       throw new BadRequestException('Unauthorized access to invoice');
     }
 

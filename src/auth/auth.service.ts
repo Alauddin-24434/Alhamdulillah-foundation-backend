@@ -2,7 +2,6 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
-  NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -13,13 +12,10 @@ import { Model } from 'mongoose';
 import { User, UserRole } from '../user/schemas/user.schema';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import {
-  Payment,
-  PaymentPurpose,
-  PaymentStatus,
-} from 'src/payment/schemas/payment.schema';
+import { RefreshToken } from './schemas/refresh-token.schema';
 
 /* ================= TOKEN PAYLOAD ================= */
+
 export interface TokenPayload {
   _id: string;
   email: string;
@@ -30,8 +26,12 @@ export interface TokenPayload {
 @Injectable()
 export class AuthService {
   constructor(
-    @InjectModel(User.name) private readonly userModel: Model<User>,
-    @InjectModel(Payment.name) private readonly paymentModel: Model<Payment>,
+    @InjectModel(User.name)
+    private readonly userModel: Model<User>,
+
+    @InjectModel(RefreshToken.name)
+    private readonly refreshTokenModel: Model<RefreshToken>,
+
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {}
@@ -41,22 +41,15 @@ export class AuthService {
   private generateAccessToken(payload: TokenPayload): string {
     return this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-      expiresIn: this.configService.get('JWT_ACCESS_EXPIRES') || '15m',
+      expiresIn: '15m',
     });
   }
 
   private generateRefreshToken(payload: TokenPayload): string {
     return this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-      expiresIn: this.configService.get('JWT_REFRESH_EXPIRES') || '7d',
+      expiresIn: '7d',
     });
-  }
-
-  private generateTokens(payload: TokenPayload) {
-    return {
-      accessToken: this.generateAccessToken(payload),
-      refreshToken: this.generateRefreshToken(payload),
-    };
   }
 
   private verifyRefreshToken(token: string): TokenPayload {
@@ -68,25 +61,18 @@ export class AuthService {
   /* ================= REGISTER ================= */
 
   async register(registerDto: RegisterDto) {
-    const { email, password, name, phone, address, avatar } = registerDto;
+    const { email } = registerDto;
 
-    const existingUser = await this.userModel.findOne({ email });
-    if (existingUser) {
-      throw new ConflictException('User with this email already exists');
+    const exists = await this.userModel.findOne({ email });
+    if (exists) {
+      throw new ConflictException('User already exists');
     }
 
-    const user = new this.userModel({
-      name,
-      email,
-      password,
-      phone: phone || '',
-      address: address || '',
-      avatar: avatar || '',
+    const user = await this.userModel.create({
+      ...registerDto,
       role: UserRole.USER,
       permissions: [],
     });
-
-    await user.save();
 
     const payload: TokenPayload = {
       _id: user._id.toString(),
@@ -95,48 +81,31 @@ export class AuthService {
       permissions: user.permissions,
     };
 
-    const tokens = this.generateTokens(payload);
+    const accessToken = this.generateAccessToken(payload);
+    const refreshToken = this.generateRefreshToken(payload);
 
-    return {
-      user,
-      ...tokens,
-    };
+    await this.saveRefreshToken(user._id.toString(), refreshToken);
+
+    return { user, accessToken, refreshToken };
   }
 
   /* ================= LOGIN ================= */
 
   async login(loginDto: LoginDto) {
-    console.log('🔐 Login request received', loginDto);
-
     const { email, password } = loginDto;
-    // console.log('📧 Email:', email);
+
     if (!password) {
       throw new BadRequestException('Password is required');
     }
 
-    // 1️⃣ Find user
     const user = await this.userModel.findOne({ email }).select('+password');
-    if (!user) {
-      // console.log('❌ Login failed: User not found');
+    if (!user || !(await user.comparePassword(password))) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // 2️⃣ Check password
-    const isPasswordValid = await user.comparePassword(password);
-    if (!isPasswordValid) {
-      // console.log('❌ Login failed: Wrong password');
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    // console.log('✅ Password matched');
-
-    // 3️⃣ Update last login
     user.lastLogin = new Date();
     await user.save();
 
-    console.log('🕒 Last login updated');
-
-    // 4️⃣ JWT Payload
     const payload: TokenPayload = {
       _id: user._id.toString(),
       email: user.email,
@@ -144,77 +113,66 @@ export class AuthService {
       permissions: user.permissions,
     };
 
-    // console.log('🧾 JWT payload created');
+    const accessToken = this.generateAccessToken(payload);
+    const refreshToken = this.generateRefreshToken(payload);
 
-    // 5️⃣ Generate tokens
-    const { accessToken, refreshToken } = this.generateTokens(payload);
+    await this.saveRefreshToken(user._id.toString(), refreshToken);
 
-    // console.log('🔑 Tokens generated successfully');
-
-    // 6️⃣ Final success log
-    // console.log(`🎉 Login success for user: ${user.email}`);
-
-    return {
-      user,
-      accessToken,
-      refreshToken,
-    };
+    return { user, accessToken, refreshToken };
   }
 
-  async me(userId: string) {
-    // 1️⃣ User
-    const user = await this.userModel.findById(userId).lean();
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-    console.log(user);
-
-    // 2️⃣ Check activation payment
-    const activationPayment = await this.paymentModel.findOne({
-      userId,
-      // purpose: PaymentPurpose.ACCOUNT_ACTIVATION,
-      status: PaymentStatus.PAID,
-    });
-
-    const isActivated = !!activationPayment;
-    console.log({
-      ...user,
-      isActivated: isActivated,
-    });
-    return {
-      ...user,
-      isActivated: isActivated,
-    };
-  }
-
-  /* ================= REFRESH TOKEN ================= */
+  /* ================= REFRESH ACCESS TOKEN ================= */
 
   async refreshAccessToken(refreshToken: string) {
-    try {
-      const payload = this.verifyRefreshToken(refreshToken);
+    const tokenInDb = await this.refreshTokenModel.findOne({
+      token: refreshToken,
+    });
 
-      const user = await this.userModel.findById(payload._id);
-      if (!user) {
-        throw new UnauthorizedException('User not found');
-      }
-
-      const accessToken = this.generateAccessToken({
-        _id: user._id.toString(),
-        email: user.email,
-        role: user.role,
-        permissions: user.permissions,
-      });
-
-      return {
-        user,
-        accessToken,
-      };
-    } catch {
-      throw new UnauthorizedException('Invalid refresh token');
+    if (!tokenInDb) {
+      throw new UnauthorizedException('Refresh token revoked');
     }
+
+    const payload = this.verifyRefreshToken(refreshToken);
+
+    if (tokenInDb.userId.toString() !== payload._id) {
+      throw new UnauthorizedException('Token mismatch');
+    }
+
+    const user = await this.userModel.findById(payload._id);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const accessToken = this.generateAccessToken({
+      _id: user._id.toString(),
+      email: user.email,
+      role: user.role,
+      permissions: user.permissions,
+    });
+
+    return { user, accessToken };
   }
 
-  /* ================= VALIDATE USER ================= */
+  /* ================= LOGOUT ================= */
+
+  async logout(refreshToken?: string) {
+    if (!refreshToken) return;
+
+    await this.refreshTokenModel.deleteOne({ token: refreshToken });
+  }
+
+  /* ================= HELPERS ================= */
+
+  private async saveRefreshToken(userId: string, token: string) {
+    // 🔥 one device = one token
+    await this.refreshTokenModel.deleteMany({ userId });
+
+    await this.refreshTokenModel.create({
+      userId,
+      token,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+  }
 
   async validateUser(userId: string) {
     return this.userModel.findById(userId);

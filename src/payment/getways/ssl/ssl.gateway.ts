@@ -57,7 +57,7 @@ export class SslGateway implements PaymentGateway {
     };
 
       const response = await this.sslcz.init(paymentData);
-      console.log('SSLCommerz Init Response:', response);
+      // console.log('SSLCommerz Init Response:', response);
 
     if (response?.status !== 'SUCCESS') {
       console.error('SSLCommerz Init Error:', response?.failedreason || response);
