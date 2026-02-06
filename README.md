@@ -57,17 +57,20 @@ NestJS-based REST API for the Alhamdulillah Foundation investment management pla
 ## Installation
 
 1.  **Clone the repository**
+
     ```bash
     git clone <repository_url>
     cd backend
     ```
 
 2.  **Install dependencies**
+
     ```bash
     npm install
     ```
 
 3.  **Set up environment variables**
+
     ```bash
     cp .env.example .env
     ```
@@ -108,24 +111,26 @@ NestJS-based REST API for the Alhamdulillah Foundation investment management pla
 ## Running the Application
 
 **Development Mode**
+
 ```bash
 npm run start:dev
 ```
 
 **Production Mode**
+
 ```bash
 npm run build
 npm run start:prod
 ```
 
-The API will run at `http://localhost:5000/api` (default).
+The API will run at `https://alhamdulillah-foundation-backend.vercel.app/api` (default).
 
 ## API Documentation (Swagger)
 
 A full interactive API documentation is available via Swagger UI.
 After starting the application, visit:
 
-👉 **http://localhost:5000/docs**
+👉 **https://alhamdulillah-foundation-backend.vercel.app/docs**
 
 ## Project Structure
 
@@ -166,6 +171,7 @@ npm run test:cov
 ## Security Best Practices
 
 For production deployments:
+
 1.  **Strict CORS**: Set `FRONTEND_URL` to your actual frontend domain.
 2.  **Strong Secrets**: Use long, random strings for `JWT_SECRET` and Payment keys.
 3.  **Rate Limiting**: Adjust `THROTTLE_TTL` and `THROTTLE_LIMIT` in `app.module.ts` or env.
@@ -175,4 +181,5 @@ For production deployments:
 ## License
 
 This project is licensed under the MIT License.
+
 # Alhamdulillah-foundation-backend
